@@ -1,6 +1,11 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
+Public Const Version = "1.00"
+
+Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
+Private Const DetectionFileWrkSh = "Detection_File"
+Private Const ConfigWrkSheet = "config"
 
 Function SameTimepointExists(existing_timepoints As String, timepoint As String) As String
     Dim arr As Variant
@@ -66,10 +71,15 @@ End Function
 Function ExistingTimepointsForSubject(subject_id As String) As String
     Dim exist_tps() As String
     Dim rng As Range
+    Dim subject_id_col As String
+    Dim timepoint_offset_num As String
     
-    Set rng = Worksheets("COVID_Detection_Existing").Range("F:F") 'COVID_Detection_Existing
+    subject_id_col = GetConfigParameterValueB("ExistingDetection_SubjectID_Column")
+    timepoint_offset_num = GetConfigParameterValueB("ExistingDetection_TimepointColumn_Offset_From_Subject")
     
-    exist_tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0,-4", True)
+    Set rng = Worksheets(ExistingDetectionsWrkSh).Range(subject_id_col & ":" & subject_id_col) 'COVID_Detection_Existing '"F:F"
+    
+    exist_tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, True) '"0,-4"
     
     ExistingTimepointsForSubject = Join(exist_tps, ",")
     
@@ -78,10 +88,15 @@ End Function
 Function NewTimepointsForSubjectInManifest(subject_id As String) As String
     Dim exist_tps() As String
     Dim rng As Range
+    Dim subject_id_col As String
+    Dim timepoint_offset_num As String
     
-    Set rng = Worksheets("Detection_File").Range("A:A") 'COVID_Detection_Existing
+    subject_id_col = GetConfigParameterValueB("DetectionFile_SubjectID_Column")
+    timepoint_offset_num = GetConfigParameterValueB("DetectionFile_TimepointColumn_Offset_From_Subject")
     
-    exist_tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0,1", True, False)
+    Set rng = Worksheets(DetectionFileWrkSh).Range(subject_id_col & ":" & subject_id_col) 'COVID_Detection_Existing '"A:A"
+    
+    exist_tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, True, False) '"0,1"
     
     NewTimepointsForSubjectInManifest = Join(exist_tps, ",")
     
@@ -94,11 +109,16 @@ Function DuplicatedEntriesInManifest(subject_id As String) As String
     Dim i As Integer, j As Integer
     Dim duplicates() As String, duplicates_report() As String
     Dim aInitialised As Boolean, aInitialised2 As Boolean
+    Dim subject_id_col As String
+    Dim timepoint_offset_num As String
     
-    Set rng = Worksheets("Detection_File").Range("A:A") 'COVID_Detection_Existing
+    subject_id_col = GetConfigParameterValueB("DetectionFile_SubjectID_Column")
+    timepoint_offset_num = GetConfigParameterValueB("DetectionFile_TimepointColumn_Offset_From_Subject")
     
-    tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0,1", False, False)
-    row_nums = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0,1", False, True)
+    Set rng = Worksheets(DetectionFileWrkSh).Range(subject_id_col & ":" & subject_id_col) 'COVID_Detection_Existing '"A:A"
+    
+    tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, False, False) '"0,1"
+    row_nums = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, False, True) '"0,1"
     
     tps_sorted = tps
     QuickSort tps_sorted, 0, UBound(tps_sorted) 'sort the values of the array
@@ -268,3 +288,52 @@ errLab:
     IsInArray = False
 End Function
 
+Private Function GetConfigParameterValueB(cfg_param_name As String, Optional wb As Workbook = Nothing) As String
+    'retrieve value from column B of the config tab
+    GetConfigParameterValueB = GetConfigParameterValueByColumn(cfg_param_name, "B", wb)
+End Function
+
+Private Function GetConfigParameterValueC(cfg_param_name As String, Optional wb As Workbook = Nothing) As String
+    'retrieve value from column C of the config tab
+    GetConfigParameterValueC = GetConfigParameterValueByColumn(cfg_param_name, "C", wb)
+End Function
+
+Private Function GetConfigParameterValueByColumn(cfg_param_name As String, column_letter As String, Optional wb As Workbook = Nothing) As String
+    Dim cfg_row As Integer
+    Dim out_val As String
+    Dim ws_cfg As Worksheet
+    
+    If wb Is Nothing Then
+        Set ws_cfg = Worksheets(ConfigWrkSheet)
+    Else
+        Set ws_cfg = wb.Worksheets(ConfigWrkSheet)
+    End If
+    
+    'get config value to identify column letter on the shipment tab
+    cfg_row = FindRowNumberOfConfigParam(cfg_param_name, wb)
+    If cfg_row > 0 Then
+        'get configuration value
+        out_val = ws_cfg.Range(column_letter & CStr(cfg_row))
+    Else
+        out_val = ""
+    End If
+    GetConfigParameterValueByColumn = out_val
+End Function
+
+'searches for a given parameter name on the config page and returns the row number it was found on
+Private Function FindRowNumberOfConfigParam(param_name As String, Optional wb As Workbook = Nothing) As Integer
+    Dim ws_cfg As Worksheet
+    
+    If wb Is Nothing Then
+        Set ws_cfg = Worksheets(ConfigWrkSheet)
+    Else
+        Set ws_cfg = wb.Worksheets(ConfigWrkSheet)
+    End If
+    
+    If IsError(Application.Match(param_name, ws_cfg.Range("A:A"), 0)) Then
+        FindRowNumberOfConfigParam = 0
+    Else
+        FindRowNumberOfConfigParam = Application.Match(param_name, ws_cfg.Range("A:A"), 0)
+    End If
+    
+End Function
