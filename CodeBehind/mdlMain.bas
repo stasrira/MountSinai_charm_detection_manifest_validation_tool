@@ -5,6 +5,7 @@ Public Const Version = "1.00"
 
 Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
 Private Const DetectionFileWrkSh = "Detection_File"
+Private Const TempLoadWrkSh = "temp_load"
 Private Const ConfigWrkSheet = "config"
 
 Function SameTimepointExists(existing_timepoints As String, timepoint As String) As String
@@ -336,4 +337,382 @@ Private Function FindRowNumberOfConfigParam(param_name As String, Optional wb As
         FindRowNumberOfConfigParam = Application.Match(param_name, ws_cfg.Range("A:A"), 0)
     End If
     
+End Function
+
+Public Sub ImportDetectionFile()
+    ImportFile Worksheets(DetectionFileWrkSh), "COVID Detection"
+End Sub
+
+Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
+    Dim strFileToOpen As String
+    
+    On Error GoTo ErrHandler 'commented to test, need to be uncommented
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    Dim s As Worksheet
+    
+    Set s = Worksheets(TempLoadWrkSh)
+    
+    'if this is the first time files are being loaded, use the current file location as default path
+'    If Not firstFileLoaded Then
+'        ChDir Application.ActiveWorkbook.path
+'        firstFileLoaded = True
+'    End If
+    
+    'select a file to be loaded
+    strFileToOpen = Application.GetOpenFilename _
+        (Title:="Please choose a " & file_type_to_open & " file to open", _
+        FileFilter:="Excel Files *.xlsx* (*.xlsx*), Excel 2003 Files *.xls* (*.xls*),")
+    
+    If strFileToOpen = "False" Then
+        GoTo ExitMark
+    End If
+    
+    s.Cells.Clear 'delete everything on the target worksheet
+    
+    CopyDataFromFile s, strFileToOpen 'copy date of the main sheet from the source file to the to the temp_load sheet
+    
+    CopySelectedColumnToTargetSheet s, Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Participant_ID_new_file_mapping") 'copy Pparticipant Id column '"A:A"
+    CopySelectedColumnToTargetSheet s, Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Timepoint_new_file_mapping") 'copy Pparticipant Id column '"B:B"
+    CopySelectedColumnToTargetSheet s, Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Results_new_file_mapping") 'copy Pparticipant Id column '"C:C"
+    FillSelectedColumnWithConstantValue GetDateReceived(), Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Date_received_column"), s.UsedRange.Rows.Count
+    FillSelectedColumnWithConstantValue GetFileNameFromPath(strFileToOpen), Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("File_Name_Column"), s.UsedRange.Rows.Count
+    
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    
+    RefreshWorkbookData
+    
+'    MsgBox "CHARM " & file_type_to_open & " file " & vbCrLf _
+'            & strFileToOpen & vbCrLf _
+'            & " was successfully loaded to the '" & ws_target.Name & "' tab." & vbCrLf & vbCrLf _
+'            & "Note: you might need to review settings of the 'config' tab to make sure that those are set correctly. " _
+'            & "Please pay special attention to the highlighed rows."
+    
+    Exit Sub
+    
+ErrHandler:
+    MsgBox Err.Description, vbCritical
+ExitMark:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+End Sub
+
+'This sub opens specified file and loads it contents to a specified worksheet
+Private Sub CopyDataFromFile(ws_target As Worksheet, _
+                    src_file_path As String, _
+                    Optional src_worksheet_name As String = "")
+    On Error GoTo ErrHandler
+    Application.ScreenUpdating = False
+    
+    Dim src As Workbook
+    Dim path As String
+    
+    ' OPEN THE SOURCE EXCEL WORKBOOK IN "READ ONLY MODE".
+    Set src = Workbooks.Open(src_file_path, True, True)
+    
+    If src_worksheet_name = "" Then
+        src_worksheet_name = src.Worksheets(1).Name
+    End If
+    
+    src.Worksheets(src_worksheet_name).Cells.Copy 'copy into a clipboard
+    ws_target.Cells.PasteSpecial Paste:=xlPasteAll 'paste to the worksheet
+    Application.CutCopyMode = False 'clean clipboard
+    
+  
+    ' CLOSE THE SOURCE FILE.
+    src.Close False             ' FALSE - DON'T SAVE THE SOURCE FILE.
+    Set src = Nothing
+    
+    Application.ScreenUpdating = True
+    
+    Exit Sub
+    
+ErrHandler:
+    MsgBox Err.Description, vbCritical
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+End Sub
+
+Private Sub CopySelectedColumnToTargetSheet(source As Worksheet, target As Worksheet, mapping As String)
+    Dim copy_cols() As String
+    Dim src_col As Range, dst_col As Range
+    Dim src_used_rows As Integer, dest_used_rows As Integer
+    
+    src_used_rows = source.UsedRange.Rows.Count
+    dest_used_rows = target.UsedRange.Rows.Count
+    
+    copy_cols = Split(mapping, ":")
+    If ArrLength(copy_cols) > 1 Then
+        Set src_col = source.Range(copy_cols(0) & "2:" & copy_cols(0) & CStr(src_used_rows))
+        Set dst_col = target.Range(copy_cols(1) & "2:" & copy_cols(1) & CStr(dest_used_rows))
+    End If
+    dst_col.Clear
+    
+    src_col.Cells.Copy 'copy into a clipboard
+    dst_col.Cells.PasteSpecial Paste:=xlPasteValues 'paste to the worksheet
+    
+End Sub
+
+Private Sub FillSelectedColumnWithConstantValue(update_value As String, target As Worksheet, column_to_fill As String, fill_rows_num As Integer)
+    Dim dst_col As Range
+    Dim dest_used_rows As Integer
+    
+    'clean target column first
+    dest_used_rows = target.UsedRange.Rows.Count
+    Set dst_col = target.Range(column_to_fill & "2:" & column_to_fill & CStr(dest_used_rows))
+    dst_col.Clear
+    
+    'update destination columns with the given value
+    Set dst_col = target.Range(column_to_fill & "2:" & column_to_fill & CStr(fill_rows_num))
+    dst_col.value = update_value
+    
+End Sub
+
+Public Sub RefreshWorkbookData()
+    Dim refresh_db As String
+    
+    'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
+    Application.CalculateFullRebuild
+    
+    refresh_db = GetConfigParameterValueB("Run Database refresh link on a fly")
+    If UCase(refresh_db) = "TRUE" Then
+        RefreshDBConnections
+    End If
+    
+    'Application.ScreenUpdating = False
+    'ActiveWorkbook.ForceFullCalculation
+'    Application.ScreenUpdating = True
+End Sub
+
+Public Sub RefreshDBConnections()
+    'refresh the database linked data
+    ActiveWorkbook.RefreshAll
+End Sub
+
+Private Function GetFileNameFromPath(path As String)
+    Dim fso As New FileSystemObject
+    Dim fileName As String
+    
+    fileName = fso.GetFileName(path)
+    GetFileNameFromPath = fileName
+End Function
+
+Public Function GetDateReceived() As String
+    Dim cfg_value As String
+    
+    cfg_value = GetConfigParameterValueB("Date_received_value")
+    
+    If UCase(cfg_value) = "AUTO" Then
+        GetDateReceived = CStr(Date)
+    Else
+        If IsDate(cfg_value) Then
+            GetDateReceived = cfg_value
+        Else
+            GetDateReceived = "N/D"
+        End If
+    End If
+End Function
+
+Public Function SavePreparedData() As Dictionary
+    'Dim abort As Boolean: abort = False
+    Dim wb As Workbook, ws_source As Worksheet, ws_target As Worksheet
+    Dim wb_source As Workbook
+    Dim out_dict As New Scripting.Dictionary
+    Dim new_file_name As String, path As String
+    Dim str1 As String
+    Dim empty_file_flag As Boolean
+    Dim msg_status As Integer
+    
+    'On Error GoTo ErrHandler 'commented to test, need to be uncommented
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    Set wb_source = Application.ActiveWorkbook
+    
+    Set ws_source = Worksheets(DetectionFileWrkSh) 'set reference to the "metadata" sheet
+    path = GetConfigParameterValueB("Save Created Metadata Files Path")
+    new_file_name = path & "\" & GetFileNameToSave()  'get the file name for the new excel file
+    
+    'AddLogEntry "Start creating new '" & file_type & "' file in '" & path & "' folder.", LogMsgType.info
+    
+    Set wb = CreateNewFile(new_file_name) ' create a new excel file and get a reference to it
+    If Not wb Is Nothing Then
+        Set ws_target = wb.Sheets(1) 'get reference to the worksheet of the new file
+        
+        ws_source.Range(GetConfigParameterValueB("DetectionFile_ColumnExportRange", wb_source)).Copy 'copy data from a source sheet to a memory
+        ws_target.Cells.PasteSpecial Paste:=xlPasteValues 'paste data from memory to the target sheet as "values only"
+        
+        CleanCreatedFile ws_target, wb_source
+        
+        wb.Save 'save the new file
+        
+        If ws_target.UsedRange.Rows.Count > 1 Then
+            'if the cleaned worksheet contains at least on data row (beside the header), proceed here
+            empty_file_flag = False 'set flag to save changes on closing
+            
+            str1 = "New detection export file was successfully created - " & wb.FullName '& ""
+            msg_status = vbInformation
+            out_dict.Add "msg", str1
+            out_dict.Add "status", "OK" 'vbInformation
+            
+            'AddLogEntry str1, LogMsgType.info, wb_source
+        Else
+            empty_file_flag = True 'set flag not to save changes on closing
+        
+            str1 = "Newly created detection export file - " & wb.FullName & " - appears to be empty and will be deleted."
+            msg_status = vbExclamation
+            out_dict.Add "msg", str1
+            out_dict.Add "status", "EMPTY" 'vbInformation
+            
+            'AddLogEntry str1, LogMsgType.warning, wb_source
+        End If
+        
+        wb.Close 'close the new file
+        
+        MsgBox str1, msg_status, "Export of Detection Data"
+        
+        If empty_file_flag Then
+            'delete just created empty file
+            If DeleteFile(new_file_name) Then
+                str1 = "Newly created detection export file - " & new_file_name & " - was successfully deleted."
+                'AddLogEntry str1, LogMsgType.warning, wb_source
+            Else
+                str1 = "The application was not able to delete the newly created detection export file - " & wb.FullName & "."
+                'AddLogEntry str1, LogMsgType.Error, wb_source
+            End If
+        End If
+        
+        Application.CutCopyMode = False 'clean clipboard
+    Else
+        str1 = "Existing file with the same name was present (" & new_file_name & "). " & vbCrLf & vbCrLf & "Creation of the new detection export file was skipped based on user's input."
+        MsgBox str1, vbCritical, "Export of Detection Data"
+        out_dict.Add "msg", str1
+        out_dict.Add "status", "EXISTS" 'vbInformation
+        'AddLogEntry str1, LogMsgType.warning
+    End If
+    'AddLogEntry "Finish creating new '" & file_type & "' file.", LogMsgType.info
+    
+    Set SavePreparedData = out_dict
+    Exit Function
+    
+ErrHandler:
+    MsgBox Err.Description, vbCritical
+ExitMark:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+End Function
+
+Private Sub CleanCreatedFile(ws_target As Worksheet, wb_source As Workbook)
+    Dim abort As Boolean: abort = False
+    Dim deleteColumns As String: deleteColumns = ""
+    Dim formatDateColumns As String: formatDateColumns = ""
+    Dim col As Variant, cfg_row As Integer
+    
+    deleteColumns = GetConfigParameterValueB("Delete Columns In Target", wb_source)
+    formatDateColumns = GetConfigParameterValueB("Format Date Columns In Target", wb_source)
+    
+    If Len(Trim(deleteColumns)) > 0 Then
+        'loop through columns and delete one by one
+        For Each col In Split(deleteColumns, ",")
+            col = Trim(col)
+            If Len(col) > 0 Then
+                ws_target.Columns(col).Delete
+            End If
+        Next
+    End If
+    
+    If Len(Trim(formatDateColumns)) > 0 Then
+        'loop through columns and delete one by one
+        For Each col In Split(formatDateColumns, ",")
+            col = Trim(col)
+            If Len(col) > 0 Then
+                ws_target.Columns(col).NumberFormat = "mm/dd/yyyy"
+            End If
+        Next
+    End If
+    
+    DeleteBlankRows ws_target 'delete blank rows in the new file
+
+End Sub
+
+Private Sub DeleteBlankRows(ws_target As Worksheet)
+    Dim SourceRange As Range
+    Dim EntireRow As Range
+    Dim i As Long, non_blanks As Long, empty_strings As Long
+ 
+    Set SourceRange = ws_target.UsedRange ' Cells.End(xlToLeft)
+ 
+    If Not (SourceRange Is Nothing) Then
+        'Application.ScreenUpdating = False
+ 
+        For i = SourceRange.Rows.Count To 1 Step -1
+            Set EntireRow = SourceRange.Cells(i, 1).EntireRow
+            non_blanks = Application.WorksheetFunction.CountA(EntireRow)
+            empty_strings = Application.WorksheetFunction.CountIf(EntireRow, "")
+            If non_blanks = 0 Or EntireRow.Cells.Count = empty_strings Then
+                EntireRow.Delete
+            Else
+                'Print ("Not blank row")
+            End If
+        Next
+ 
+        'Application.ScreenUpdating = True
+    End If
+End Sub
+
+'returns True if the file was deleted
+Private Function DeleteFile(ByVal FileToDelete As String) As Boolean
+    Dim fso As New FileSystemObject, aFile As File
+    
+    If (fso.FileExists(FileToDelete)) Then
+        Set aFile = fso.GetFile(FileToDelete)
+        aFile.Delete
+    End If
+    
+    DeleteFile = Not (fso.FileExists(FileToDelete))
+End Function
+
+Private Function CreateNewFile(file_name As String, Optional new_sheet_name As String = "Sheet1") As Workbook
+    'expected file_type values: "metadata", "manifest"
+    Dim path As String, cfg_row As Integer, new_file_name As String
+    'Dim abort As Boolean: abort = False
+    Dim wb As Workbook
+    
+    Set wb = Workbooks.Add(xlWBATWorksheet) 'create a new excel file with a single sheet
+    wb.Sheets(1).Name = new_sheet_name 'rename the sheet of the workbook
+    On Error GoTo Err_SaveAs
+    wb.SaveAs (file_name) 'save new excel file to a specified folder with the given name
+    On Error GoTo 0
+    Set CreateNewFile = wb
+
+    Exit Function
+Err_SaveAs:
+    wb.Close False
+    Set CreateNewFile = Nothing
+End Function
+
+Private Function GetFileNameToSave()
+    'expected file_type values: "metadata", "manifest"
+    
+    'Dim timepoint As String, spec_prep As String
+    Dim date_received As String
+    'Dim cfg_row As Integer
+    Dim post_fix As String
+    Dim ship_date As String
+    
+'    timepoint = GetTimepoint() 'get timepoint value
+'    spec_prep = GetSpecimenPrepAbbr() 'get specimen abbreviation value
+    ship_date = GetDateReceived()
+    post_fix = GetConfigParameterValueB("File Name Post-fix") 'get post-fix value for created files
+    
+    If Not IsDate(ship_date) Then
+        'verify the returned ship_date value
+        ship_date = Date
+    End If
+    
+    ship_date = Format(ship_date, "yyyy_mm_dd")
+    
+    GetFileNameToSave = "CHARM_COVID_Detection_" & ship_date & "_prepared_internally" & Trim(post_fix) & ".xlsx"
 End Function
