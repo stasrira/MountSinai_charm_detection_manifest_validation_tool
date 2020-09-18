@@ -281,6 +281,16 @@ Function checkConditionalFormat(sheet As String, column_letter As String, condit
     
 End Function
 
+Function checkConditionalFormatCount(sheet As String, column_letter As String, condition_val As String) As Integer
+    Dim ws As Worksheet
+    Dim col As Range
+    
+    Set ws = Worksheets(sheet)
+    Set col = ws.Range(column_letter & ":" & column_letter)
+    checkConditionalFormatCount = Application.WorksheetFunction.CountIf(col, condition_val & "*")
+        
+End Function
+
 Private Function IsInArray(stringToBeFound As String, arr As Variant) As Boolean
     On Error GoTo errLab
     IsInArray = Not IsError(Application.Match(stringToBeFound, arr, 0))
@@ -340,7 +350,33 @@ Private Function FindRowNumberOfConfigParam(param_name As String, Optional wb As
 End Function
 
 Public Sub ImportDetectionFile()
+    Dim iResponse As Integer
+    
+    'confirm if user want to proceed.
+    iResponse = MsgBox("The system is about to start importing COVID Detection Manifest file to the 'Detection_File' tab. " _
+                & "Any currently existing COVID Detection data will be overwritten wih the new data!" _
+                & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & vbCrLf & vbCrLf _
+                & "Note: " _
+                & vbCrLf & "- The import process might take prolonged time (up to 1 or 2 minutes), depending on the number of rows being imported. " _
+                & vbCrLf & "- A final confirmation will be displayed upon completion." _
+                & vbCrLf & "- Some screen flickering might occur during the process. ", _
+                vbOKCancel + vbInformation, "CHARM COVID Detection Validation")
+    
+    If iResponse <> vbOK Then
+        'exit sub based on user's response
+        Exit Sub
+    End If
+    
     ImportFile Worksheets(DetectionFileWrkSh), "COVID Detection"
+    
+    Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
+    Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
+    
+    MsgBox "File loading was completed. Proceeding to refreshing all validation results.", vbInformation, "CHARM COVID Detection Validation"
+    
+    RefreshWorkbookData
+    
+    
 End Sub
 
 Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
@@ -379,10 +415,10 @@ Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
     FillSelectedColumnWithConstantValue GetDateReceived(), Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Date_received_column"), s.UsedRange.Rows.Count
     FillSelectedColumnWithConstantValue GetFileNameFromPath(strFileToOpen), Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("File_Name_Column"), s.UsedRange.Rows.Count
     
+'    RefreshWorkbookData
+
     Application.EnableEvents = True
     Application.ScreenUpdating = True
-    
-    RefreshWorkbookData
     
 '    MsgBox "CHARM " & file_type_to_open & " file " & vbCrLf _
 '            & strFileToOpen & vbCrLf _
@@ -481,6 +517,11 @@ Public Sub RefreshWorkbookData()
         RefreshDBConnections
     End If
     
+    Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
+    Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
+    
+    MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab.", vbInformation, "CHARM COVID Detection Validation"
+    
     'Application.ScreenUpdating = False
     'ActiveWorkbook.ForceFullCalculation
 '    Application.ScreenUpdating = True
@@ -499,7 +540,7 @@ Private Function GetFileNameFromPath(path As String)
     GetFileNameFromPath = fileName
 End Function
 
-Public Function GetDateReceived() As String
+Private Function GetDateReceived() As String
     Dim cfg_value As String
     
     cfg_value = GetConfigParameterValueB("Date_received_value")
@@ -524,16 +565,29 @@ Public Function SavePreparedData() As Dictionary
     Dim str1 As String
     Dim empty_file_flag As Boolean
     Dim msg_status As Integer
+    Dim iResponse As Integer
+    
+    path = GetConfigParameterValueB("Save Created Metadata Files Path")
+    new_file_name = path & "\" & GetFileNameToSave()  'get the file name for the new excel file
+    
+    'confirm if user want to proceed.
+    iResponse = MsgBox("The system is about to start exporting validated data from 'Detection_File' tab." & vbCrLf _
+                & "Based on the tool's configuration settings, the output will be saved to the following file: " & vbCrLf & new_file_name _
+                & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & _
+                vbOKCancel + vbInformation, "CHARM COVID Detection Validation")
+                
+    
+    If iResponse <> vbOK Then
+        'exit sub based on user's response
+        Exit Function
+    End If
     
     'On Error GoTo ErrHandler 'commented to test, need to be uncommented
     Application.EnableEvents = False
     Application.ScreenUpdating = False
     
     Set wb_source = Application.ActiveWorkbook
-    
     Set ws_source = Worksheets(DetectionFileWrkSh) 'set reference to the "metadata" sheet
-    path = GetConfigParameterValueB("Save Created Metadata Files Path")
-    new_file_name = path & "\" & GetFileNameToSave()  'get the file name for the new excel file
     
     'AddLogEntry "Start creating new '" & file_type & "' file in '" & path & "' folder.", LogMsgType.info
     
@@ -715,4 +769,46 @@ Private Function GetFileNameToSave()
     ship_date = Format(ship_date, "yyyy_mm_dd")
     
     GetFileNameToSave = "CHARM_COVID_Detection_" & ship_date & "_prepared_internally" & Trim(post_fix) & ".xlsx"
+End Function
+
+Public Sub ShowVersionMsg()
+    MsgBox "CHARM COVID Detection Validation Tool - version #" & Version _
+    & vbCrLf & vbCrLf _
+    & "Please send any comment and questions about this tool to 'stas.rirak@mssm.edu'", _
+    vbInformation, "CHARM COVID Detection Validation Tool"
+End Sub
+
+Public Sub OpenHelpLink()
+    Dim url As String
+    
+    url = GetConfigParameterValue("Help document")
+    ThisWorkbook.FollowHyperlink (url)
+    
+End Sub
+
+Public Function ValidateTimepointValue(timepoint As String)
+    Dim timepoint_validation_failed As Boolean
+    'validate time point
+    If Len(timepoint) > 4 Then
+        'log error
+        'AddLogEntry "Provided Timepoint value '" & timepoint & "' is too long (longer then 4 characters).", LogMsgType.Error
+        timepoint_validation_failed = True
+    End If
+    'validate time point
+    If Len(timepoint) < 3 Then
+        'log error
+        'AddLogEntry "Provided Timepoint value '" & timepoint & "' is too short (less then 2 characters).", LogMsgType.Error
+        timepoint_validation_failed = True
+    End If
+    'validate time point
+    If UCase(Left(timepoint, 1)) <> "T" Then
+        'log error
+        'AddLogEntry "The Timepoint value '" & timepoint & "' has to start with letter 'T'.", LogMsgType.Error
+        timepoint_validation_failed = True
+    End If
+    'log message, if timepoint is valid
+'    If Not timepoint_validation_failed Then
+'        'AddLogEntry "The Timepoint value '" & timepoint & "' was recognized as valid.", LogMsgType.info
+'    End If
+    ValidateTimepointValue = timepoint_validation_failed
 End Function

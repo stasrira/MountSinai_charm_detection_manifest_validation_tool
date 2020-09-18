@@ -27,52 +27,17 @@ Public Sub LoadCustomMenus()
     With cmbControl
         .Caption = cCustomMenuName 'names the menu item
         With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Import Shipment File For Processing" 'adds a description to the menu item
-            .OnAction = "ImportShipmentFile" 'runs the specified macro
+            .Caption = "Import Detection Manifest" 'adds a description to the menu item
+            .OnAction = "ImportDetectionFile" 'runs the specified macro
             .FaceId = 109 '638 '1098 'assigns an icon to the dropdown
         End With
         With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Import Study/Demographic File For Processing" 'adds a description to the menu item
-            .OnAction = "ImportDemographicFile" 'runs the specified macro
-            .FaceId = 109 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Import Lab Corrected Stats File For Conversion" 'adds a description to the menu item
-            .OnAction = "ImportLabStatsFile" 'runs the specified macro
-            .FaceId = 109 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Convert Lab Stats to Shipment Manifest" 'adds a description to the menu item
-            .OnAction = "Convert_LabStats_To_Shipment_File" 'runs the specified macro
-            .FaceId = 1378 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Duplicate CPT columns as Plasma" 'adds a description to the menu item
-            .OnAction = "DuplicateCPTColumnsAsPlasma" 'runs the specified macro
-            .FaceId = 297 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Validate Currently Selected Specimen/Timepoint combination" 'adds a description to the menu item
-            .OnAction = "ValidateCurrentSpecimenTimepointColumn" 'runs the specified macro
-            .FaceId = 249 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Validate All SELECTED For Processing Specimen/Timepoint combination" 'adds a description to the menu item
-            .OnAction = "ValidateAllSpecimenTimepointColumns" 'runs the specified macro
-            .FaceId = 706 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Process Currently Selected Specimen/Timepoint combination" 'adds a description to the menu item
-            .OnAction = "SavePreparedFiles" 'runs the specified macro
+            .Caption = "Export Validated Detection File" 'adds a description to the menu item
+            .OnAction = "SavePreparedData" 'runs the specified macro
             .FaceId = 526 '638 '1098 'assigns an icon to the dropdown
         End With
         With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Process All SELECTED For Processing Specimen/Timepoint combinations" 'adds a description to the menu item
-            .OnAction = "ProcessAllSpecimens" 'runs the specified macro
-            .FaceId = 156 '638 '1098 'assigns an icon to the dropdown
-        End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Refresh All Calculated Data" 'adds a description to the menu item
+            .Caption = "Refresh Validation Results" 'adds a description to the menu item
             .OnAction = "RefreshWorkbookData" 'runs the specified macro
             .FaceId = 37 '638 '1098 'assigns an icon to the dropdown
         End With
@@ -81,11 +46,11 @@ Public Sub LoadCustomMenus()
             .OnAction = "RefreshDBConnections" 'runs the specified macro
             .FaceId = 688 '638 '1098 'assigns an icon to the dropdown
         End With
-        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
-            .Caption = "Help" 'adds a description to the menu item
-            .OnAction = "OpenHelpLink" 'runs the specified macro
-            .FaceId = 49 '638 '1098 'assigns an icon to the dropdown
-        End With
+'        With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
+'            .Caption = "Help" 'adds a description to the menu item
+'            .OnAction = "OpenHelpLink" 'runs the specified macro
+'            .FaceId = 49 '638 '1098 'assigns an icon to the dropdown
+'        End With
         With .Controls.Add(Type:=msoControlButton) 'adds a dropdown button to the menu item
             .Caption = "About" 'adds a description to the menu item
             .OnAction = "ShowVersionMsg" 'runs the specified macro
