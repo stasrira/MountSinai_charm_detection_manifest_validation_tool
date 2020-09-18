@@ -351,6 +351,7 @@ End Function
 
 Public Sub ImportDetectionFile()
     Dim iResponse As Integer
+    Dim importFileOutcome As Boolean
     
     'confirm if user want to proceed.
     iResponse = MsgBox("The system is about to start importing COVID Detection Manifest file to the 'Detection_File' tab. " _
@@ -358,6 +359,7 @@ Public Sub ImportDetectionFile()
                 & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & vbCrLf & vbCrLf _
                 & "Note: " _
                 & vbCrLf & "- The import process might take prolonged time (up to 1 or 2 minutes), depending on the number of rows being imported. " _
+                & vbCrLf & "- The automatic verification of all validation rules will be run immediately after importing and also might take extra time depending on the number of row being processed. " _
                 & vbCrLf & "- A final confirmation will be displayed upon completion." _
                 & vbCrLf & "- Some screen flickering might occur during the process. ", _
                 vbOKCancel + vbInformation, "CHARM COVID Detection Validation")
@@ -367,19 +369,23 @@ Public Sub ImportDetectionFile()
         Exit Sub
     End If
     
-    ImportFile Worksheets(DetectionFileWrkSh), "COVID Detection"
+    importFileOutcome = ImportFile(Worksheets(DetectionFileWrkSh), "COVID Detection")
     
-    Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
-    Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
-    
-    MsgBox "File loading was completed. Proceeding to refreshing all validation results.", vbInformation, "CHARM COVID Detection Validation"
-    
-    RefreshWorkbookData
-    
+    If importFileOutcome Then
+        'proceed here only if the file was successfully loaded
+        Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
+        Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
+        
+        'MsgBox "File loading was completed. Proceeding to refreshing all validation results.", vbInformation, "CHARM COVID Detection Validation"
+        
+        RefreshWorkbookData True 'refresh all validation rules (avoiding showing a confirmation upon completion).
+        
+        MsgBox "File loading was fully completed and all validation rules were refreshed.", vbInformation, "CHARM COVID Detection Validation"
+    End If
     
 End Sub
 
-Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
+Private Function ImportFile(ws_target As Worksheet, file_type_to_open As String) As Boolean
     Dim strFileToOpen As String
     
     On Error GoTo ErrHandler 'commented to test, need to be uncommented
@@ -426,14 +432,16 @@ Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
 '            & "Note: you might need to review settings of the 'config' tab to make sure that those are set correctly. " _
 '            & "Please pay special attention to the highlighed rows."
     
-    Exit Sub
+    ImportFile = True
+    Exit Function
     
 ErrHandler:
     MsgBox Err.Description, vbCritical
 ExitMark:
     Application.EnableEvents = True
     Application.ScreenUpdating = True
-End Sub
+    ImportFile = False
+End Function
 
 'This sub opens specified file and loads it contents to a specified worksheet
 Private Sub CopyDataFromFile(ws_target As Worksheet, _
@@ -506,7 +514,7 @@ Private Sub FillSelectedColumnWithConstantValue(update_value As String, target A
     
 End Sub
 
-Public Sub RefreshWorkbookData()
+Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     Dim refresh_db As String
     
     'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
@@ -514,22 +522,28 @@ Public Sub RefreshWorkbookData()
     
     refresh_db = GetConfigParameterValueB("Run Database refresh link on a fly")
     If UCase(refresh_db) = "TRUE" Then
-        RefreshDBConnections
+        RefreshDBConnections True
     End If
     
     Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
     Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
     
-    MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab.", vbInformation, "CHARM COVID Detection Validation"
+    If Not hideConfirmation Then
+        MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab.", vbInformation, "CHARM COVID Detection Validation"
+    End If
     
     'Application.ScreenUpdating = False
     'ActiveWorkbook.ForceFullCalculation
 '    Application.ScreenUpdating = True
 End Sub
 
-Public Sub RefreshDBConnections()
+Public Sub RefreshDBConnections(Optional hideConfirmation As Boolean = False)
     'refresh the database linked data
     ActiveWorkbook.RefreshAll
+    
+    If Not hideConfirmation Then
+        MsgBox "All database linked data was refreshed. Check results on the 'COVID_Detection_Existing' tab.", vbInformation, "CHARM COVID Detection Validation"
+    End If
 End Sub
 
 Private Function GetFileNameFromPath(path As String)
