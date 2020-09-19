@@ -413,7 +413,9 @@ Private Function ImportFile(ws_target As Worksheet, file_type_to_open As String)
     
     s.Cells.Clear 'delete everything on the target worksheet
     
-    CopyDataFromFile s, strFileToOpen 'copy date of the main sheet from the source file to the to the temp_load sheet
+    CopyDataFromFile s, strFileToOpen 'copy date of the main sheet from the source file to the temp_load sheet
+    
+    DeleteBlankRows s 'clean blank rows of just imported file on the temp_load sheet
     
     CopySelectedColumnToTargetSheet s, Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Participant_ID_new_file_mapping") 'copy Pparticipant Id column '"A:A"
     CopySelectedColumnToTargetSheet s, Worksheets(DetectionFileWrkSh), GetConfigParameterValueB("Timepoint_new_file_mapping") 'copy Pparticipant Id column '"B:B"
@@ -721,7 +723,7 @@ Private Sub DeleteBlankRows(ws_target As Worksheet)
             empty_strings = Application.WorksheetFunction.CountIf(EntireRow, "")
             If non_blanks = 0 Or EntireRow.Cells.Count = empty_strings Then
                 EntireRow.Delete
-            Else
+            'Else
                 'Print ("Not blank row")
             End If
         Next
