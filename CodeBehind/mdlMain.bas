@@ -352,6 +352,8 @@ End Function
 Public Sub ImportDetectionFile()
     Dim iResponse As Integer
     Dim importFileOutcome As Boolean
+    Dim strFileToOpen As String
+    Dim tStart As Date, tEnd As Date
     
     'confirm if user want to proceed.
     iResponse = MsgBox("The system is about to start importing COVID Detection Manifest file to the 'Detection_File' tab. " _
@@ -369,7 +371,19 @@ Public Sub ImportDetectionFile()
         Exit Sub
     End If
     
-    importFileOutcome = ImportFile(Worksheets(DetectionFileWrkSh), "COVID Detection")
+    'select a file to be loaded
+    strFileToOpen = Application.GetOpenFilename _
+        (Title:="Please choose a COVID Detectio file to open", _
+        FileFilter:="Excel Files *.xlsx* (*.xlsx*), Excel 2003 Files *.xls* (*.xls*),")
+    
+    If strFileToOpen = "False" Then
+        Exit Sub
+    End If
+    
+    tStart = Now()
+    'Debug.Print (tStart)
+    
+    importFileOutcome = ImportFile(strFileToOpen, Worksheets(DetectionFileWrkSh))
     
     If importFileOutcome Then
         'proceed here only if the file was successfully loaded
@@ -380,13 +394,18 @@ Public Sub ImportDetectionFile()
         
         RefreshWorkbookData True 'refresh all validation rules (avoiding showing a confirmation upon completion).
         
-        MsgBox "File loading was fully completed and all validation rules were refreshed.", vbInformation, "CHARM COVID Detection Validation"
+        tEnd = Now()
+        'Debug.Print (tEnd)
+        
+        MsgBox "File loading was fully completed and all validation rules were refreshed." _
+            & vbCrLf & "Execution time: " & getTimeLength(tStart, tEnd) _
+            , vbInformation, "CHARM COVID Detection Validation"
     End If
     
 End Sub
 
-Private Function ImportFile(ws_target As Worksheet, file_type_to_open As String) As Boolean
-    Dim strFileToOpen As String
+Private Function ImportFile(strFileToOpen As String, ws_target As Worksheet) As Boolean ', file_type_to_open As String
+    'Dim strFileToOpen As String
     
     On Error GoTo ErrHandler 'commented to test, need to be uncommented
     Application.EnableEvents = False
@@ -396,20 +415,14 @@ Private Function ImportFile(ws_target As Worksheet, file_type_to_open As String)
     
     Set s = Worksheets(TempLoadWrkSh)
     
-    'if this is the first time files are being loaded, use the current file location as default path
-'    If Not firstFileLoaded Then
-'        ChDir Application.ActiveWorkbook.path
-'        firstFileLoaded = True
+'    'select a file to be loaded
+'    strFileToOpen = Application.GetOpenFilename _
+'        (Title:="Please choose a " & file_type_to_open & " file to open", _
+'        FileFilter:="Excel Files *.xlsx* (*.xlsx*), Excel 2003 Files *.xls* (*.xls*),")
+'
+'    If strFileToOpen = "False" Then
+'        GoTo ExitMark
 '    End If
-    
-    'select a file to be loaded
-    strFileToOpen = Application.GetOpenFilename _
-        (Title:="Please choose a " & file_type_to_open & " file to open", _
-        FileFilter:="Excel Files *.xlsx* (*.xlsx*), Excel 2003 Files *.xls* (*.xls*),")
-    
-    If strFileToOpen = "False" Then
-        GoTo ExitMark
-    End If
     
     s.Cells.Clear 'delete everything on the target worksheet
     
@@ -518,6 +531,9 @@ End Sub
 
 Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     Dim refresh_db As String
+    Dim tStart As Date, tEnd As Date
+    
+    tStart = Now()
     
     'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
     Application.CalculateFullRebuild
@@ -530,8 +546,12 @@ Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
     Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
     
+    tEnd = Now()
+    
     If Not hideConfirmation Then
-        MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab.", vbInformation, "CHARM COVID Detection Validation"
+        MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab." _
+            & vbCrLf & "Execution time: " & getTimeLength(tStart, tEnd) _
+            , vbInformation, "CHARM COVID Detection Validation"
     End If
     
     'Application.ScreenUpdating = False
@@ -828,3 +848,20 @@ Public Function ValidateTimepointValue(timepoint As String)
 '    End If
     ValidateTimepointValue = timepoint_validation_failed
 End Function
+
+Public Function getTimeLength(tStart As Date, tEnd As Date) As String
+    Dim mSeconds As Long, mHours As Long, mMinutes As Long
+    Dim strTime As String
+    
+    mSeconds = DateDiff("s", tStart, tEnd)
+    mHours = mSeconds \ 3600
+    mMinutes = (mSeconds - (mHours * 3600)) \ 60
+    mSeconds = mSeconds - ((mHours * 3600) + (mMinutes * 60))
+    
+    If mHours > 0 Then strTime = mHours & " hours "
+    If mMinutes > 0 Then strTime = strTime & mMinutes & " minutes "
+    strTime = strTime & mSeconds & " seconds "
+    
+    getTimeLength = strTime
+End Function
+
