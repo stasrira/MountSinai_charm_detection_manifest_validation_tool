@@ -609,7 +609,7 @@ Public Function SavePreparedData() As Dictionary
     'confirm if user want to proceed.
     iResponse = MsgBox("The system is about to start exporting validated data from 'Detection_File' tab." & vbCrLf _
                 & "Based on the tool's configuration settings, the output will be saved to the following file: " & vbCrLf & new_file_name _
-                & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & _
+                & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'.", _
                 vbOKCancel + vbInformation, "CHARM COVID Detection Validation")
                 
     
@@ -865,3 +865,32 @@ Public Function getTimeLength(tStart As Date, tEnd As Date) As String
     getTimeLength = strTime
 End Function
 
+Public Function strToBool(value As String) As Boolean
+    On Error GoTo errLab
+    
+    value = Trim(value)
+    strToBool = CBool(value)
+    Exit Function
+    
+errLab:
+    strToBool = False
+End Function
+
+Public Function strToOr(ParamArray vars() As Variant) As Boolean
+    Dim var As Variant
+    Dim out As Boolean
+    Dim i As Integer
+    
+    For Each var In vars
+        'Debug.Print i
+        out = strToBool(CStr(var))
+        'Debug.Print out
+        If out Then Exit For
+        i = i + 1
+    Next
+    strToOr = out
+End Function
+
+Public Function DetectionFileLoadedRows() As Integer
+    DetectionFileLoadedRows = Worksheets(DetectionFileWrkSh).Cells(Rows.Count, 1).End(xlUp).Row
+End Function
