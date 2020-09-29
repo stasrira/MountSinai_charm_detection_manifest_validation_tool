@@ -1,12 +1,13 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.00"
+Public Const Version = "1.01"
 
 Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
 Private Const DetectionFileWrkSh = "Detection_File"
 Private Const TempLoadWrkSh = "temp_load"
 Private Const ConfigWrkSheet = "config"
+Private Const DictionaryWrkSheet = "dictionary"
 
 Function SameTimepointExists(existing_timepoints As String, timepoint As String) As String
     Dim arr As Variant
@@ -357,11 +358,12 @@ Public Sub ImportDetectionFile()
     
     'confirm if user want to proceed.
     iResponse = MsgBox("The system is about to start importing COVID Detection Manifest file to the 'Detection_File' tab. " _
-                & "Any currently existing COVID Detection data will be overwritten wih the new data!" _
+                & vbCrLf & "- Any currently existing COVID Detection data will be overwritten wih the new data!" _
+                & vbCrLf & "- The current 'Date Received' date will be set to: " & GetDateReceived() & ". If it is not desired, cancel this operation and update the 'Date_received_value' field on the 'Config' tab." _
                 & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & vbCrLf & vbCrLf _
                 & "Note: " _
-                & vbCrLf & "- The import process might take prolonged time (up to 1 or 2 minutes), depending on the number of rows being imported. " _
-                & vbCrLf & "- The automatic verification of all validation rules will be run immediately after importing and also might take extra time depending on the number of row being processed. " _
+                & vbCrLf & "- This process might take prolonged time (up to 1 or 2 minutes), depending on the number of rows being imported. " _
+                & vbCrLf & "- The automatic verification of all validation rules will be run immediately after importing. " _
                 & vbCrLf & "- A final confirmation will be displayed upon completion." _
                 & vbCrLf & "- Some screen flickering might occur during the process. ", _
                 vbOKCancel + vbInformation, "CHARM COVID Detection Validation")
@@ -534,6 +536,12 @@ Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     Dim tStart As Date, tEnd As Date
     
     tStart = Now()
+        
+    'clear out any applied filters
+    ResetFilters Worksheets(DetectionFileWrkSh)
+    
+    'apply dictionary conversion to the values of the Detection column
+    VerifyDetectionValues
     
     'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
     Application.CalculateFullRebuild
@@ -592,11 +600,11 @@ Private Function GetDateReceived() As String
     End If
 End Function
 
-Public Function SavePreparedData() As Dictionary
+Public Function SavePreparedData() As dictionary
     'Dim abort As Boolean: abort = False
     Dim wb As Workbook, ws_source As Worksheet, ws_target As Worksheet
     Dim wb_source As Workbook
-    Dim out_dict As New Scripting.Dictionary
+    Dim out_dict As New Scripting.dictionary
     Dim new_file_name As String, path As String
     Dim str1 As String
     Dim empty_file_flag As Boolean
@@ -893,4 +901,144 @@ End Function
 
 Public Function DetectionFileLoadedRows() As Integer
     DetectionFileLoadedRows = Worksheets(DetectionFileWrkSh).Cells(Rows.Count, 1).End(xlUp).Row
+End Function
+
+Sub ResetFilters(wks As Worksheet)
+
+    On Error GoTo ErrHandler 'commented to test, need to be uncommented
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    If wks.AutoFilterMode Then
+        wks.AutoFilter.ShowAllData
+    End If
+    GoTo ExitMark
+    
+ErrHandler:
+    MsgBox Err.Description, vbCritical
+ExitMark:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+End Sub
+
+'returns dictionary providing mapping between actual and expected COVID detection values
+Private Function GetDetectionValuesDict() As Scripting.dictionary
+    Set GetDetectionValuesDict = GetDictItems("Detection_Values")
+End Function
+
+Private Function GetDictItems(dict_name As String) As Scripting.dictionary
+    Dim col_num As Integer
+    Dim dict As New Scripting.dictionary
+
+    col_num = FindColNumberOfDictCategory(dict_name)
+    If col_num > 0 Then
+        Set dict = GetDictItemsPerColNum(col_num)
+    Else
+        Set dict = Nothing
+    End If
+    
+    Set GetDictItems = dict
+End Function
+
+'searches for a given parameter name on the config page and returns the row number it was found on
+Private Function FindColNumberOfDictCategory(categ_name As String, Optional wb As Workbook = Nothing) As Integer
+    Dim ws_cfg As Worksheet
+    
+    If wb Is Nothing Then
+        Set ws_cfg = Worksheets(DictionaryWrkSheet)
+    Else
+        Set ws_cfg = wb.Worksheets(DictionaryWrkSheet)
+    End If
+    
+    If IsError(Application.Match(categ_name, ws_cfg.Rows(1), 0)) Then
+        FindColNumberOfDictCategory = 0
+    Else
+        FindColNumberOfDictCategory = Application.Match(categ_name, ws_cfg.Rows(1), 0)
+    End If
+    
+End Function
+
+Private Function GetDictItemsPerColNum(col_num As Integer, Optional wb As Workbook = Nothing) As dictionary
+    Dim ws_cfg As Worksheet
+    Dim dict_range As Range
+    Dim dict As New Scripting.dictionary
+    Dim cell As Range
+        
+    If wb Is Nothing Then
+        Set ws_cfg = Worksheets(DictionaryWrkSheet)
+    Else
+        Set ws_cfg = wb.Worksheets(DictionaryWrkSheet)
+    End If
+    
+    'get range based on the number of column provided as a parameter
+    Set dict_range = ws_cfg.Columns(col_num)
+    
+    'loop through cells of the range
+    For Each cell In dict_range.Cells
+        If cell.Row > 1 Then 'proceed only if this is not a first (header) row
+            If cell.Row > ws_cfg.UsedRange.Rows.Count Then
+                Exit For
+            End If
+            'Debug.Print cell.Address & " - " & cell.Offset(0, 1).Address
+            If Len(Trim(cell.Value2)) > 0 Then 'check the dictionary key value is not blank
+                'Debug.Print cell.Value2 & " - " & cell.Offset(0, 1).Value2
+                dict.Add cell.Value2, cell.offset(0, 1).Value2
+            End If
+        End If
+    Next
+   
+    Set GetDictItemsPerColNum = dict
+End Function
+
+'converts provided detection_val name to an expected name of it based on the harcoded mapping dictionary
+Function GetDetectionValue(detection_val As String, Optional DetectionValuesDict As dictionary = Nothing) As String
+    Dim dictionary As Scripting.dictionary
+    Dim out_val As String
+    
+    'if DetectionValuesDict was not supplied, get a fresh copy of it
+    If DetectionValuesDict Is Nothing Then
+        Set dictionary = GetDetectionValuesDict()
+    Else
+        Set dictionary = DetectionValuesDict
+    End If
+        
+    If dictionary.Exists(UCase(detection_val)) Then
+        out_val = dictionary(UCase(detection_val))
+    Else
+        out_val = detection_val 'return same value, if no match was found
+    End If
+    GetDetectionValue = out_val
+End Function
+
+Public Function VerifyDetectionValues()
+    Dim rng As Range
+    Dim rows_num As Integer
+    Dim cell As Range
+    Dim detect_vals_dict As dictionary
+    Dim detection_col As String
+    
+    On Error GoTo ErrHandler 'commented to test, need to be uncommented
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    Set detect_vals_dict = GetDetectionValuesDict()
+    
+    detection_col = GetConfigParameterValueB("DetectionFile_DetectionResluts_Column")
+    With Worksheets(DetectionFileWrkSh)
+        rows_num = DetectionFileLoadedRows()
+        Set rng = .Range(detection_col & "2:" & detection_col & CStr(rows_num))
+        
+        For Each cell In rng
+            cell.value = GetDetectionValue(cell.Value2, detect_vals_dict)
+        Next
+        
+    End With
+
+GoTo ExitMark
+    
+ErrHandler:
+    MsgBox Err.Description, vbCritical
+ExitMark:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
 End Function
