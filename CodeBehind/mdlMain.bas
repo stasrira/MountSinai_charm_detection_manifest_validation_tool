@@ -1,7 +1,7 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.01"
+Public Const Version = "1.02"
 
 Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
 Private Const DetectionFileWrkSh = "Detection_File"
@@ -644,6 +644,8 @@ Public Function SavePreparedData() As dictionary
         
         CleanCreatedFile ws_target, wb_source
         
+        AddDummyColumnsToExport ws_target, wb_source
+        
         wb.Save 'save the new file
         
         If ws_target.UsedRange.Rows.Count > 1 Then
@@ -759,6 +761,37 @@ Private Sub DeleteBlankRows(ws_target As Worksheet)
         'Application.ScreenUpdating = True
     End If
 End Sub
+
+Private Sub AddDummyColumnsToExport(ws_target As Worksheet, wb_source As Workbook)
+    Dim add_columns_str As String
+    Dim cols_arr As Variant
+    Dim col As Variant
+    Dim delim As String: delim = "||"
+    Dim col_last As Integer
+    
+    add_columns_str = GetConfigParameterValueB("Add Dummy Columns To Export", wb_source)
+    cols_arr = Split(add_columns_str, delim)
+    
+    For Each col In cols_arr
+        'Debug.Print (col)
+        col_last = FindLastColumnInRange(ws_target.Range("$1:$1")) ' pass 1st row to find the last used column in it
+        ws_target.Columns(col_last + 1).Cells(1, 1).value = col
+    Next
+    
+End Sub
+
+Private Function FindLastColumnInRange(rng As Range, _
+                        Optional What As String = "*", _
+                        Optional LookIn As XlFindLookIn = xlValues, _
+                        Optional LookAt As XlLookAt = xlPart, _
+                        Optional SearchOrder As XlSearchOrder = xlByRows, _
+                        Optional SearchDirection As XlSearchDirection = xlPrevious, _
+                        Optional MatchCase As Boolean = False, _
+                        Optional MatchByte As Boolean = False, _
+                        Optional SearchFormat As Boolean = False) As Integer
+
+    FindLastColumnInRange = rng.Find(What, rng.Cells(1, 1), LookIn, LookAt, SearchOrder, SearchDirection, MatchCase, MatchByte, SearchFormat).Column
+End Function
 
 'returns True if the file was deleted
 Private Function DeleteFile(ByVal FileToDelete As String) As Boolean
