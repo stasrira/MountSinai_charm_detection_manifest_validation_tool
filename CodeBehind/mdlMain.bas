@@ -1,7 +1,7 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.02"
+Public Const Version = "1.03"
 
 Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
 Private Const DetectionFileWrkSh = "Detection_File"
@@ -612,6 +612,17 @@ Public Function SavePreparedData() As dictionary
     Dim iResponse As Integer
     
     path = GetConfigParameterValueB("Save Created Metadata Files Path")
+    'validate received path
+    If Dir(path, vbDirectory) = "" Then
+        str1 = "The path to the exporting directory:" & vbCrLf & vbCrLf & path & vbCrLf & vbCrLf & "provided in the 'config' tab (see item named 'Save Created Metadata Files Path') cannot be reached. " _
+                & "Please verify that path is valid and the current user has access to it." _
+                & vbCrLf & vbCrLf & "Creation of the new detection export file was aborted!"
+        MsgBox str1, vbCritical, "Export of Detection Data"
+        
+        Set SavePreparedData = out_dict
+        Exit Function
+    End If
+    
     new_file_name = path & "\" & GetFileNameToSave()  'get the file name for the new excel file
     
     'confirm if user want to proceed.
