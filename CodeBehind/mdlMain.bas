@@ -1,13 +1,15 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.03"
+Public Const Version = "1.04"
 
 Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
 Private Const DetectionFileWrkSh = "Detection_File"
 Private Const TempLoadWrkSh = "temp_load"
 Private Const ConfigWrkSheet = "config"
 Private Const DictionaryWrkSheet = "dictionary"
+
+Public Global_Validated As Boolean
 
 Function SameTimepointExists(existing_timepoints As String, timepoint As String) As String
     Dim arr As Variant
@@ -92,11 +94,20 @@ Function NewTimepointsForSubjectInManifest(subject_id As String) As String
     Dim rng As Range
     Dim subject_id_col As String
     Dim timepoint_offset_num As String
+    Dim rows_num As Integer
+    
+    If Len(Trim(subject_id)) = 0 Then
+        'do not proceed if the subject id is blank
+        NewTimepointsForSubjectInManifest = ""
+        Exit Function
+    End If
+    
+    rows_num = DetectionFileLoadedRows()
     
     subject_id_col = GetConfigParameterValueB("DetectionFile_SubjectID_Column")
     timepoint_offset_num = GetConfigParameterValueB("DetectionFile_TimepointColumn_Offset_From_Subject")
     
-    Set rng = Worksheets(DetectionFileWrkSh).Range(subject_id_col & ":" & subject_id_col) 'COVID_Detection_Existing '"A:A"
+    Set rng = Worksheets(DetectionFileWrkSh).Range(subject_id_col & "1:" & subject_id_col & CStr(rows_num)) 'COVID_Detection_Existing '"A:A"
     
     exist_tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, True, False) '"0,1"
     
@@ -113,11 +124,20 @@ Function DuplicatedEntriesInManifest(subject_id As String) As String
     Dim aInitialised As Boolean, aInitialised2 As Boolean
     Dim subject_id_col As String
     Dim timepoint_offset_num As String
+    Dim rows_num As Integer
+        
+    If Len(Trim(subject_id)) = 0 Then
+        'do not proceed if the subject id is blank
+        DuplicatedEntriesInManifest = ""
+        Exit Function
+    End If
+    
+    rows_num = DetectionFileLoadedRows()
     
     subject_id_col = GetConfigParameterValueB("DetectionFile_SubjectID_Column")
     timepoint_offset_num = GetConfigParameterValueB("DetectionFile_TimepointColumn_Offset_From_Subject")
     
-    Set rng = Worksheets(DetectionFileWrkSh).Range(subject_id_col & ":" & subject_id_col) 'COVID_Detection_Existing '"A:A"
+    Set rng = Worksheets(DetectionFileWrkSh).Range(subject_id_col & "1:" & subject_id_col & CStr(rows_num)) 'COVID_Detection_Existing '"A:A"
     
     tps = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, False, False) '"0,1"
     row_nums = FindAllValuesOrLocationRows(rng, Trim(subject_id), "0," & timepoint_offset_num, False, True) '"0,1"
@@ -271,7 +291,7 @@ Private Sub QuickSort(ByRef Field() As String, ByVal LB As Long, ByVal UB As Lon
     If P1 < UB Then Call QuickSort(Field, P1, UB)
 End Sub
 
-Function checkConditionalFormat(sheet As String, column_letter As String, condition_val As String) As Boolean
+Function checkConditionalFormat(sheet As String, column_letter As String, condition_val As Boolean) As Boolean
     Dim ws As Worksheet
     Dim col As Range
     
@@ -282,14 +302,15 @@ Function checkConditionalFormat(sheet As String, column_letter As String, condit
     
 End Function
 
-Function checkConditionalFormatCount(sheet As String, column_letter As String, condition_val As String) As Integer
+Function checkConditionalFormatCount(sheet As String, column_letter As String, condition_val As Boolean) As Integer
     Dim ws As Worksheet
     Dim col As Range
     
     Set ws = Worksheets(sheet)
     Set col = ws.Range(column_letter & ":" & column_letter)
-    checkConditionalFormatCount = Application.WorksheetFunction.CountIf(col, condition_val & "*")
-        
+    checkConditionalFormatCount = Application.WorksheetFunction.CountIf(col, condition_val)
+    'checkConditionalFormatCount = Application.WorksheetFunction.CountIf(col, condition_val & "*")
+    
 End Function
 
 Private Function IsInArray(stringToBeFound As String, arr As Variant) As Boolean
@@ -496,18 +517,18 @@ ErrHandler:
     Application.ScreenUpdating = True
 End Sub
 
-Private Sub CopySelectedColumnToTargetSheet(source As Worksheet, target As Worksheet, mapping As String)
+Private Sub CopySelectedColumnToTargetSheet(source As Worksheet, Target As Worksheet, mapping As String)
     Dim copy_cols() As String
     Dim src_col As Range, dst_col As Range
     Dim src_used_rows As Integer, dest_used_rows As Integer
     
     src_used_rows = source.UsedRange.Rows.Count
-    dest_used_rows = target.UsedRange.Rows.Count
+    dest_used_rows = Target.UsedRange.Rows.Count
     
     copy_cols = Split(mapping, ":")
     If ArrLength(copy_cols) > 1 Then
         Set src_col = source.Range(copy_cols(0) & "2:" & copy_cols(0) & CStr(src_used_rows))
-        Set dst_col = target.Range(copy_cols(1) & "2:" & copy_cols(1) & CStr(dest_used_rows))
+        Set dst_col = Target.Range(copy_cols(1) & "2:" & copy_cols(1) & CStr(dest_used_rows))
     End If
     dst_col.Clear
     
@@ -516,17 +537,17 @@ Private Sub CopySelectedColumnToTargetSheet(source As Worksheet, target As Works
     
 End Sub
 
-Private Sub FillSelectedColumnWithConstantValue(update_value As String, target As Worksheet, column_to_fill As String, fill_rows_num As Integer)
+Private Sub FillSelectedColumnWithConstantValue(update_value As String, Target As Worksheet, column_to_fill As String, fill_rows_num As Integer)
     Dim dst_col As Range
     Dim dest_used_rows As Integer
     
     'clean target column first
-    dest_used_rows = target.UsedRange.Rows.Count
-    Set dst_col = target.Range(column_to_fill & "2:" & column_to_fill & CStr(dest_used_rows))
+    dest_used_rows = Target.UsedRange.Rows.Count
+    Set dst_col = Target.Range(column_to_fill & "2:" & column_to_fill & CStr(dest_used_rows))
     dst_col.Clear
     
     'update destination columns with the given value
-    Set dst_col = target.Range(column_to_fill & "2:" & column_to_fill & CStr(fill_rows_num))
+    Set dst_col = Target.Range(column_to_fill & "2:" & column_to_fill & CStr(fill_rows_num))
     dst_col.value = update_value
     
 End Sub
@@ -543,13 +564,16 @@ Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     'apply dictionary conversion to the values of the Detection column
     VerifyDetectionValues
     
-    'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
-    Application.CalculateFullRebuild
-    
     refresh_db = GetConfigParameterValueB("Run Database refresh link on a fly")
     If UCase(refresh_db) = "TRUE" Then
         RefreshDBConnections True
     End If
+    
+    'populate main validation columns
+    PopulateValidationColumns
+    
+    'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
+    Application.CalculateFullRebuild
     
     Worksheets(DetectionFileWrkSh).Activate 'bring focus to the "logs" tab
     Worksheets(DetectionFileWrkSh).Cells(1, 1).Activate 'bring focus to the first cell on the sheet
@@ -561,6 +585,8 @@ Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
             & vbCrLf & "Execution time: " & getTimeLength(tStart, tEnd) _
             , vbInformation, "CHARM COVID Detection Validation"
     End If
+    
+    Global_Validated = True
     
     'Application.ScreenUpdating = False
     'ActiveWorkbook.ForceFullCalculation
@@ -610,6 +636,19 @@ Public Function SavePreparedData() As dictionary
     Dim empty_file_flag As Boolean
     Dim msg_status As Integer
     Dim iResponse As Integer
+    
+    If Not Global_Validated Then
+        'confirm if user want to proceed.
+        iResponse = MsgBox("Some data interactoins were registered on the 'Data_Validation' tab. The displayed validation results might not be current. " _
+                    & "It is suggested to re-run the 'Referesh Validatoin Results' process." _
+                    & vbCrLf & vbCrLf & "Do you want to proceed with the Export procedure anyway? If not, click 'Cancel'.", _
+                    vbOKCancel + vbInformation, "CHARM COVID Detection Validation")
+        
+        If iResponse <> vbOK Then
+            'exit sub based on user's response
+            Exit Function
+        End If
+    End If
     
     path = GetConfigParameterValueB("Save Created Metadata Files Path")
     'validate received path
@@ -931,16 +970,27 @@ End Function
 Public Function strToOr(ParamArray vars() As Variant) As Boolean
     Dim var As Variant
     Dim out As Boolean
-    Dim i As Integer
     
     For Each var In vars
         'Debug.Print i
         out = strToBool(CStr(var))
         'Debug.Print out
         If out Then Exit For
-        i = i + 1
     Next
     strToOr = out
+End Function
+
+Public Function OrOfArray(vars() As Variant) As Boolean
+    Dim var As Variant
+    Dim out As Boolean
+    
+    For Each var In vars
+        'Debug.Print i
+        out = strToBool(CStr(var))
+        'Debug.Print out
+        If out Then Exit For
+    Next
+    OrOfArray = out
 End Function
 
 Public Function DetectionFileLoadedRows() As Integer
@@ -1086,3 +1136,118 @@ ExitMark:
     Application.EnableEvents = True
     Application.ScreenUpdating = True
 End Function
+
+Public Sub PopulateValidationColumn(validation_name As String, _
+                            ParamArray vars() As Variant)
+
+'                            Optional param_col1 As String = "", _
+'                            Optional param_col2 As String = "", _
+'                            Optional param_col3 As String = "", _
+'                            Optional param_col4 As String = "", _
+'                            Optional param_col5 As String = "", _
+'                            Optional param_col6 As String = "" _
+'                            )
+    Dim rng As Range, cell As Range
+    Dim rows_num As Integer
+    Dim valid_col As String
+    Dim varValues() As Variant, var As Variant
+    Dim aInitialised As Boolean
+    
+    
+    valid_col = GetConfigParameterValueB(validation_name)
+    'valid_col = "V" ' for testing only
+    
+    If Len(Trim(valid_col)) = 0 Then
+        ' provided validation column was not identified, exit sub
+        Exit Sub
+    End If
+    
+    With Worksheets(DetectionFileWrkSh)
+        rows_num = DetectionFileLoadedRows()
+        
+        'get reference to a range to be populated
+        Set rng = .Range(valid_col & "2:" & valid_col & CStr(rows_num))
+        
+        'clear the range first
+        rng.ClearContents
+        
+        For Each cell In rng
+            'Debug.Print (cell.Address)
+            
+            Select Case validation_name
+                Case "Existing Timepoints For Subject"
+                    cell.value = ExistingTimepointsForSubject(.Range(CStr(vars(0)) & cell.Row).Value2)
+                Case "New Timepoints For Subject in Manifest"
+                    cell.value = NewTimepointsForSubjectInManifest(.Range(CStr(vars(0)) & cell.Row).Value2)
+                Case "Duplicated Timepoints for Subject in Manifest"
+                    cell.value = DuplicatedEntriesInManifest(.Range(CStr(vars(0)) & cell.Row).Value2)
+                Case "Same TimePoint Exists"
+                    cell.value = SameTimepointExists(.Range(CStr(vars(0)) & cell.Row).Value2, .Range(CStr(vars(1)) & cell.Row).Value2)
+                
+
+                Case "NewTimepoint Is Not Most Recent"
+                    cell.value = IsNotTimepointLatest(.Range(CStr(vars(0)) & cell.Row).Value2, .Range(CStr(vars(1)) & cell.Row).Value2, 1)
+                Case "Duplicates in manifest"
+                    cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, False, True)
+                Case "No COVID Detection"
+                    cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, True, False)
+                Case "Invalid Timepoint Format"
+                    cell.value = ValidateTimepointValue(.Range(CStr(vars(0)) & cell.Row).Value2)
+                Case "No Participant ID"
+                    cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, True, False)
+                Case "Total Validation Failed"
+                    For Each var In vars
+                        'Redim array size
+                        If Not aInitialised Then
+                            ReDim Preserve varValues(0)
+                            aInitialised = True
+                        Else
+                            ReDim Preserve varValues(ArrLength(varValues))
+                        End If
+                        varValues(ArrLength(varValues) - 1) = .Range(CStr(var) & cell.Row).Value2
+                    Next
+                    cell.value = OrOfArray(varValues)
+                    
+                    'reset array to 0 length
+                    ReDim varValues(0)
+                    aInitialised = False
+            End Select
+            
+        Next
+        
+    End With
+End Sub
+
+Public Sub PopulateValidationColumns()
+    On Error GoTo ErrHandler 'commented to test, need to be uncommented
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    'Debug.Print (Now())
+    
+    PopulateValidationColumn "Existing Timepoints For Subject", GetConfigParameterValueB("DetectionFile_SubjectID_Column") '"A"
+    PopulateValidationColumn "New Timepoints For Subject in Manifest", GetConfigParameterValueB("DetectionFile_SubjectID_Column") '"A"
+    PopulateValidationColumn "Duplicated Timepoints for Subject in Manifest", GetConfigParameterValueB("DetectionFile_SubjectID_Column") '"A"
+    
+    PopulateValidationColumn "Same TimePoint Exists", "F", "B"
+    PopulateValidationColumn "NewTimepoint Is Not Most Recent", "F", "B"
+    
+    PopulateValidationColumn "Duplicates in manifest", "H"
+    PopulateValidationColumn "No COVID Detection", "C"
+    
+    PopulateValidationColumn "Invalid Timepoint Format", "B"
+    PopulateValidationColumn "No Participant ID", "A"
+    PopulateValidationColumn "Total Validation Failed", "I", "J", "K", "L", "M", "N"
+    
+    'Debug.Print (Now())
+    
+    GoTo ExitMark
+    
+ErrHandler:
+    MsgBox "Unexpected error has occured during execution of 'PopulateValidationColumns' procedure: " & vbCrLf & Err.Description, vbCritical
+ExitMark:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+End Sub
+
+
