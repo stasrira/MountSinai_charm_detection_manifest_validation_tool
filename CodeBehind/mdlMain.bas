@@ -555,6 +555,8 @@ End Sub
 Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     Dim refresh_db As String
     Dim tStart As Date, tEnd As Date
+    Dim bPopulateValidColumns As Boolean
+    Dim sMsg As String, iMsg As Integer
     
     tStart = Now()
         
@@ -570,7 +572,7 @@ Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     End If
     
     'populate main validation columns
-    PopulateValidationColumns
+    bPopulateValidColumns = PopulateValidationColumns
     
     'recalculate whole workbook to make sure manifest and metadata sheets are filled properly
     Application.CalculateFullRebuild
@@ -581,9 +583,21 @@ Public Sub RefreshWorkbookData(Optional hideConfirmation As Boolean = False)
     tEnd = Now()
     
     If Not hideConfirmation Then
-        MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab." _
-            & vbCrLf & "Execution time: " & getTimeLength(tStart, tEnd) _
-            , vbInformation, "CHARM COVID Detection Validation"
+        If bPopulateValidColumns Then
+            sMsg = "All validation rules were refereshed. Check results on the 'Detection_File' tab." _
+                    & vbCrLf & "Execution time: " & getTimeLength(tStart, tEnd)
+            iMsg = vbInformation
+        Else
+            sMsg = "Some errors were reported during processing validation rules. Some of the validation rules might have not be verified." _
+                    & vbCrLf & "Adjustments of the configuration parameters might resolve the problem - verify entries on the 'config' tab." _
+                    & vbCrLf & "Once errors are resolved, re-run the validatoin process."
+            iMsg = vbExclamation
+        End If
+        
+'        MsgBox "All validation rules were refereshed. Check results on the 'Detection_File' tab." _
+'            & vbCrLf & "Execution time: " & getTimeLength(tStart, tEnd) _
+'            , vbExclamation, "CHARM COVID Detection Validation"
+        MsgBox sMsg, iMsg, "CHARM COVID Detection Validation"
     End If
     
     Global_Validated = True
@@ -1139,14 +1153,6 @@ End Function
 
 Public Sub PopulateValidationColumn(validation_name As String, _
                             ParamArray vars() As Variant)
-
-'                            Optional param_col1 As String = "", _
-'                            Optional param_col2 As String = "", _
-'                            Optional param_col3 As String = "", _
-'                            Optional param_col4 As String = "", _
-'                            Optional param_col5 As String = "", _
-'                            Optional param_col6 As String = "" _
-'                            )
     Dim rng As Range, cell As Range
     Dim rows_num As Integer
     Dim valid_col As String
@@ -1218,10 +1224,12 @@ Public Sub PopulateValidationColumn(validation_name As String, _
     End With
 End Sub
 
-Public Sub PopulateValidationColumns()
+Public Function PopulateValidationColumns() As Boolean
     On Error GoTo ErrHandler 'commented to test, need to be uncommented
     Application.EnableEvents = False
     Application.ScreenUpdating = False
+    
+    Worksheets(DetectionFileWrkSh).Protect UserInterFaceOnly:=True 'adds ability to update the Detection_File sheet programmatically, while it is protected for users
     
     'Debug.Print (Now())
     
@@ -1229,25 +1237,35 @@ Public Sub PopulateValidationColumns()
     PopulateValidationColumn "New Timepoints For Subject in Manifest", GetConfigParameterValueB("DetectionFile_SubjectID_Column") '"A"
     PopulateValidationColumn "Duplicated Timepoints for Subject in Manifest", GetConfigParameterValueB("DetectionFile_SubjectID_Column") '"A"
     
-    PopulateValidationColumn "Same TimePoint Exists", "F", "B"
-    PopulateValidationColumn "NewTimepoint Is Not Most Recent", "F", "B"
+    PopulateValidationColumn "Same TimePoint Exists", GetConfigParameterValueB("Existing Timepoints For Subject"), GetConfigParameterValueB("DetectionFile_Timepoint_Column") '"F", "B"
+    PopulateValidationColumn "NewTimepoint Is Not Most Recent", GetConfigParameterValueB("Existing Timepoints For Subject"), GetConfigParameterValueB("DetectionFile_Timepoint_Column") '"F", "B"
     
-    PopulateValidationColumn "Duplicates in manifest", "H"
-    PopulateValidationColumn "No COVID Detection", "C"
+    PopulateValidationColumn "Duplicates in manifest", GetConfigParameterValueB("Duplicated Timepoints for Subject in Manifest") '"H"
+    PopulateValidationColumn "No COVID Detection", GetConfigParameterValueB("DetectionFile_DetectionResluts_Column") '"C"
     
-    PopulateValidationColumn "Invalid Timepoint Format", "B"
-    PopulateValidationColumn "No Participant ID", "A"
-    PopulateValidationColumn "Total Validation Failed", "I", "J", "K", "L", "M", "N"
+    PopulateValidationColumn "Invalid Timepoint Format", GetConfigParameterValueB("DetectionFile_Timepoint_Column") '"B"
+    PopulateValidationColumn "No Participant ID", GetConfigParameterValueB("DetectionFile_SubjectID_Column") '"A"
+    PopulateValidationColumn "Total Validation Failed", _
+                                GetConfigParameterValueB("Same TimePoint Exists"), _
+                                GetConfigParameterValueB("NewTimepoint Is Not Most Recent"), _
+                                GetConfigParameterValueB("Duplicates in manifest"), _
+                                GetConfigParameterValueB("No COVID Detection"), _
+                                GetConfigParameterValueB("Invalid Timepoint Format"), _
+                                GetConfigParameterValueB("No Participant ID")
+                                '"I", "J", "K", "L", "M", "N"
     
     'Debug.Print (Now())
+    
+    PopulateValidationColumns = True
     
     GoTo ExitMark
     
 ErrHandler:
     MsgBox "Unexpected error has occured during execution of 'PopulateValidationColumns' procedure: " & vbCrLf & Err.Description, vbCritical
+    PopulateValidationColumns = False
 ExitMark:
     Application.EnableEvents = True
     Application.ScreenUpdating = True
-End Sub
+End Function
 
 
