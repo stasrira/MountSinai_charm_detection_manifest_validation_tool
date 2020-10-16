@@ -1179,45 +1179,46 @@ Public Sub PopulateValidationColumn(validation_name As String, _
         
         For Each cell In rng
             'Debug.Print (cell.Address)
-            
-            Select Case validation_name
-                Case "Existing Timepoints For Subject"
-                    cell.value = ExistingTimepointsForSubject(.Range(CStr(vars(0)) & cell.Row).Value2)
-                Case "New Timepoints For Subject in Manifest"
-                    cell.value = NewTimepointsForSubjectInManifest(.Range(CStr(vars(0)) & cell.Row).Value2)
-                Case "Duplicated Timepoints for Subject in Manifest"
-                    cell.value = DuplicatedEntriesInManifest(.Range(CStr(vars(0)) & cell.Row).Value2)
-                Case "Same TimePoint Exists"
-                    cell.value = SameTimepointExists(.Range(CStr(vars(0)) & cell.Row).Value2, .Range(CStr(vars(1)) & cell.Row).Value2)
-                
-
-                Case "NewTimepoint Is Not Most Recent"
-                    cell.value = IsNotTimepointLatest(.Range(CStr(vars(0)) & cell.Row).Value2, .Range(CStr(vars(1)) & cell.Row).Value2, 1)
-                Case "Duplicates in manifest"
-                    cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, False, True)
-                Case "No COVID Detection"
-                    cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, True, False)
-                Case "Invalid Timepoint Format"
-                    cell.value = ValidateTimepointValue(.Range(CStr(vars(0)) & cell.Row).Value2)
-                Case "No Participant ID"
-                    cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, True, False)
-                Case "Total Validation Failed"
-                    For Each var In vars
-                        'Redim array size
-                        If Not aInitialised Then
-                            ReDim Preserve varValues(0)
-                            aInitialised = True
-                        Else
-                            ReDim Preserve varValues(ArrLength(varValues))
-                        End If
-                        varValues(ArrLength(varValues) - 1) = .Range(CStr(var) & cell.Row).Value2
-                    Next
-                    cell.value = OrOfArray(varValues)
+            If Not isDetectionFileRowBlank(cell.Row) Then 'proceed only if row is not blank; skip otherwise
+                Select Case validation_name
+                    Case "Existing Timepoints For Subject"
+                        cell.value = ExistingTimepointsForSubject(.Range(CStr(vars(0)) & cell.Row).Value2)
+                    Case "New Timepoints For Subject in Manifest"
+                        cell.value = NewTimepointsForSubjectInManifest(.Range(CStr(vars(0)) & cell.Row).Value2)
+                    Case "Duplicated Timepoints for Subject in Manifest"
+                        cell.value = DuplicatedEntriesInManifest(.Range(CStr(vars(0)) & cell.Row).Value2)
+                    Case "Same TimePoint Exists"
+                        cell.value = SameTimepointExists(.Range(CStr(vars(0)) & cell.Row).Value2, .Range(CStr(vars(1)) & cell.Row).Value2)
                     
-                    'reset array to 0 length
-                    ReDim varValues(0)
-                    aInitialised = False
-            End Select
+    
+                    Case "NewTimepoint Is Not Most Recent"
+                        cell.value = IsNotTimepointLatest(.Range(CStr(vars(0)) & cell.Row).Value2, .Range(CStr(vars(1)) & cell.Row).Value2, 1)
+                    Case "Duplicates in manifest"
+                        cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, False, True)
+                    Case "No COVID Detection"
+                        cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, True, False)
+                    Case "Invalid Timepoint Format"
+                        cell.value = ValidateTimepointValue(.Range(CStr(vars(0)) & cell.Row).Value2)
+                    Case "No Participant ID"
+                        cell.value = IIf(Len(Trim(CStr(.Range(CStr(vars(0)) & cell.Row).Value2))) = 0, True, False)
+                    Case "Total Validation Failed"
+                        For Each var In vars
+                            'Redim array size
+                            If Not aInitialised Then
+                                ReDim Preserve varValues(0)
+                                aInitialised = True
+                            Else
+                                ReDim Preserve varValues(ArrLength(varValues))
+                            End If
+                            varValues(ArrLength(varValues) - 1) = .Range(CStr(var) & cell.Row).Value2
+                        Next
+                        cell.value = OrOfArray(varValues)
+                        
+                        'reset array to 0 length
+                        ReDim varValues(0)
+                        aInitialised = False
+                End Select
+            End If
             
         Next
         
@@ -1229,7 +1230,7 @@ Public Function PopulateValidationColumns() As Boolean
     Application.EnableEvents = False
     Application.ScreenUpdating = False
     
-    Worksheets(DetectionFileWrkSh).Protect UserInterFaceOnly:=True 'adds ability to update the Detection_File sheet programmatically, while it is protected for users
+    'Worksheets(DetectionFileWrkSh).Protect UserInterFaceOnly:=True 'adds ability to update the Detection_File sheet programmatically, while it is protected for users
     
     'Debug.Print (Now())
     
@@ -1268,4 +1269,21 @@ ExitMark:
     Application.ScreenUpdating = True
 End Function
 
+Private Function isDetectionFileRowBlank(row_num As Integer) As Boolean
+    Dim row_content As String
+    Dim cols_to_check As String, col As Variant
+    Dim col_arr As Variant
+    
+    cols_to_check = GetConfigParameterValueB("Columns To Check For Row Content")
+    col_arr = Split(cols_to_check, ",")
+    If ArrLength(col_arr) > 0 Then
+        For Each col In col_arr
+            With Worksheets(DetectionFileWrkSh)
+                row_content = row_content + Trim(.Range(CStr(col) & row_num).Value2)
+            End With
+        Next
+    End If
+    
+    isDetectionFileRowBlank = Len(row_content) = 0
 
+End Function
