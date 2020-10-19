@@ -1,7 +1,7 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.04"
+Public Const Version = "1.05"
 
 Private Const ExistingDetectionsWrkSh = "COVID_Detection_Existing"
 Private Const DetectionFileWrkSh = "Detection_File"
@@ -1008,7 +1008,8 @@ Public Function OrOfArray(vars() As Variant) As Boolean
 End Function
 
 Public Function DetectionFileLoadedRows() As Integer
-    DetectionFileLoadedRows = Worksheets(DetectionFileWrkSh).Cells(Rows.Count, 1).End(xlUp).Row
+    'DetectionFileLoadedRows = Worksheets(DetectionFileWrkSh).Cells(Rows.Count, 1).End(xlUp).Row 'works only if last filled row in column is required; won't work if rows has different number of rows filled
+    DetectionFileLoadedRows = Worksheets(DetectionFileWrkSh).Cells.Find("*", SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
 End Function
 
 Sub ResetFilters(wks As Worksheet)
